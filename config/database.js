@@ -3,6 +3,12 @@ const { Pool } = require('pg');
 
 const isDev = process.env.NODE_ENV !== 'production';
 
+// DEBUG: Log the DB_HOST value
+console.log('=================================');
+console.log('DATABASE CONFIG DEBUG');
+console.log('DB_HOST from env:', process.env.DB_HOST);
+console.log('=================================');
+
 // Optimized PostgreSQL pool configuration
 const pool = new Pool({
   host: process.env.DB_HOST || 'localhost',

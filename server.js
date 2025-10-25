@@ -81,8 +81,14 @@ app.use(
 );
 
 app.use((req, res, next) => {
-  res.setHeader("Cross-Origin-Opener-Policy", "same-origin-allow-popups");
-  res.setHeader("Cross-Origin-Embedder-Policy", "require-corp");
+  // Don't set strict CORS headers for OAuth callback routes
+  if (!req.path.includes('/callback')) {
+    res.setHeader("Cross-Origin-Opener-Policy", "same-origin-allow-popups");
+    res.setHeader("Cross-Origin-Embedder-Policy", "require-corp");
+  } else {
+    // More permissive for OAuth callbacks
+    res.setHeader("Cross-Origin-Opener-Policy", "unsafe-none");
+  }
   next();
 });
 

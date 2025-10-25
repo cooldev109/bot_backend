@@ -1,9 +1,11 @@
 const pool = require("../config/database");
+const bcrypt = require("bcrypt");
 
 // Performance monitoring
 const startTime = Date.now();
 let intentsCreated = 0;
 let examplesCreated = 0;
+let usersCreated = 0;
 
 // Enhanced error handling
 const executeWithRetry = async (query, params = [], retries = 3) => {
@@ -498,6 +500,49 @@ const sampleIntents = [
   },
 ];
 
+// Seed users
+const seedUsers = async () => {
+  try {
+    console.log("👤 Starting user seeding...");
+
+    // Hash password for dev user
+    const devPasswordHash = await bcrypt.hash('123456', 12);
+
+    // Check if dev user exists
+    const checkDevUser = await executeWithRetry(
+      'SELECT id FROM users WHERE username = $1',
+      ['dev']
+    );
+
+    if (checkDevUser.rows.length > 0) {
+      console.log('⚠️  User "dev" already exists. Updating password...');
+      await executeWithRetry(
+        'UPDATE users SET password_hash = $1, updated_at = CURRENT_TIMESTAMP WHERE username = $2',
+        [devPasswordHash, 'dev']
+      );
+      console.log('✅ Updated dev user password');
+    } else {
+      await executeWithRetry(
+        `INSERT INTO users (username, email, password_hash, role, status)
+         VALUES ($1, $2, $3, $4, $5)`,
+        ['dev', 'dev@example.com', devPasswordHash, 'admin', 'active']
+      );
+      usersCreated++;
+      console.log('✅ Created dev user');
+    }
+
+    console.log('\n📋 User Credentials:');
+    console.log('   Username: dev');
+    console.log('   Password: 123456');
+    console.log('   Role: admin');
+    console.log('   Email: dev@example.com\n');
+
+  } catch (error) {
+    console.error("❌ Error seeding users:", error);
+    throw error;
+  }
+};
+
 // Seed intents and examples
 const seedIntents = async () => {
   try {
@@ -560,11 +605,28 @@ const seedIntents = async () => {
 // Main seeding function
 const runSeeding = async () => {
   try {
+    console.log("🌱 Starting database seeding...\n");
+
+    // Seed users first
+    await seedUsers();
+
+    // Then seed intents
     await seedIntents();
-    console.log("✅ Intent seeding completed successfully");
+
+    const totalTime = Date.now() - startTime;
+    console.log("\n" + "=".repeat(50));
+    console.log("🎉 DATABASE SEEDING COMPLETED!");
+    console.log("=".repeat(50));
+    console.log(`📊 Summary:`);
+    console.log(`   • Users created: ${usersCreated}`);
+    console.log(`   • Intents created: ${intentsCreated}`);
+    console.log(`   • Examples created: ${examplesCreated}`);
+    console.log(`   • Total time: ${totalTime}ms`);
+    console.log("=".repeat(50) + "\n");
+
     process.exit(0);
   } catch (error) {
-    console.error("❌ Intent seeding failed:", error);
+    console.error("❌ Database seeding failed:", error);
     process.exit(1);
   }
 };
@@ -574,4 +636,4 @@ if (require.main === module) {
   runSeeding();
 }
 
-module.exports = { seedIntents };
+module.exports = { seedIntents, seedUsers };
