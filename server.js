@@ -18,6 +18,7 @@ const googleRoutes = require("./routes/google");
 const hubspotRoutes = require("./routes/hubspot");
 const odooRoutes = require("./routes/odoo");
 const airtableRoutes = require("./routes/airtable");
+const shopifyRoutes = require("./routes/shopify");
 
 const app = express();
 const PORT = process.env.PORT || 5000;
@@ -338,6 +339,7 @@ app.use("/api/google", googleRoutes);
 app.use("/api/hubspot", hubspotRoutes);
 app.use("/api/odoo", odooRoutes);
 app.use("/api/airtable", airtableRoutes);
+app.use("/api/shopify", shopifyRoutes);
 
 // ===== ERROR HANDLING =====
 
