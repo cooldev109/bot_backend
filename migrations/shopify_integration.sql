@@ -96,22 +96,26 @@ BEGIN
 END;
 $$ LANGUAGE plpgsql;
 
--- Add triggers
+-- Add triggers (drop first if they exist)
+DROP TRIGGER IF EXISTS shopify_integrations_updated_at ON shopify_integrations;
 CREATE TRIGGER shopify_integrations_updated_at
   BEFORE UPDATE ON shopify_integrations
   FOR EACH ROW
   EXECUTE FUNCTION update_shopify_updated_at();
 
+DROP TRIGGER IF EXISTS shopify_carts_updated_at ON shopify_carts;
 CREATE TRIGGER shopify_carts_updated_at
   BEFORE UPDATE ON shopify_carts
   FOR EACH ROW
   EXECUTE FUNCTION update_shopify_updated_at();
 
+DROP TRIGGER IF EXISTS shopify_cart_items_updated_at ON shopify_cart_items;
 CREATE TRIGGER shopify_cart_items_updated_at
   BEFORE UPDATE ON shopify_cart_items
   FOR EACH ROW
   EXECUTE FUNCTION update_shopify_updated_at();
 
+DROP TRIGGER IF EXISTS shopify_orders_updated_at ON shopify_orders;
 CREATE TRIGGER shopify_orders_updated_at
   BEFORE UPDATE ON shopify_orders
   FOR EACH ROW
