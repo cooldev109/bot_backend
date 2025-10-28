@@ -8,6 +8,7 @@ const OdooService = require("./odoo");
 const EmbeddingsService = require("./embeddings");
 const IntentDetectionService = require("./intent-detection");
 const HubSpotService = require("./hubspot");
+const ShopifyService = require("./shopify");
 
 const openai = new OpenAI({
   apiKey: process.env.OPENAI_API_KEY,
@@ -212,6 +213,38 @@ class OpenAIService {
             latestMessage.content,
             conversationHistory,
             businessTone
+          );
+        // Shopify intents
+        case "shopify_product_search":
+          return await this.handleShopifyProductSearchIntent(
+            businessId,
+            latestMessage.content,
+            conversationHistory,
+            businessTone,
+            phoneNumber
+          );
+        case "shopify_product_details":
+          return await this.handleShopifyProductDetailsIntent(
+            businessId,
+            latestMessage.content,
+            conversationHistory,
+            businessTone
+          );
+        case "shopify_cart_add":
+          return await this.handleShopifyCartAddIntent(
+            businessId,
+            latestMessage.content,
+            conversationHistory,
+            businessTone,
+            phoneNumber
+          );
+        case "shopify_cart_view":
+          return await this.handleShopifyCartViewIntent(
+            businessId,
+            latestMessage.content,
+            conversationHistory,
+            businessTone,
+            phoneNumber
           );
         default:
           return await this.generateGeneralResponse([latestMessage], conversationHistory, businessTone);
@@ -2596,6 +2629,287 @@ Look for patterns like:
     } catch (error) {
       console.error("Error handling order cancel follow-up:", error.message);
       return "I apologize, but I could not cancel the order. Please try again.";
+    }
+  }
+
+  // =============================================
+  // SHOPIFY INTENT HANDLERS
+  // =============================================
+
+  /**
+   * Handle Shopify product search intent
+   */
+  async handleShopifyProductSearchIntent(businessId, message, conversationHistory, businessTone, phoneNumber) {
+    try {
+      console.log(`Handling Shopify product search intent for business ${businessId}`);
+
+      // Extract search query using GPT
+      const searchPrompt = `Extract the product search query from this message: "${message}"
+
+If the user is asking generally (like "what products do you have", "show me your catalog"), respond with: {"query": ""}
+If they're looking for something specific (like "show me widgets", "do you have gadgets"), respond with: {"query": "specific term"}
+
+Respond ONLY with valid JSON in this format:
+{
+  "query": "search term or empty string"
+}`;
+
+      const response = await openai.chat.completions.create({
+        model: this.chatModel,
+        messages: [{ role: "user", content: searchPrompt }],
+        temperature: 0.1,
+        max_tokens: 100,
+      });
+
+      let searchQuery = "";
+      try {
+        const responseContent = response.choices[0].message.content.trim();
+        const jsonMatch = responseContent.match(/\{[\s\S]*\}/);
+        const jsonString = jsonMatch ? jsonMatch[0] : responseContent;
+        const analysis = JSON.parse(jsonString);
+        searchQuery = analysis.query || "";
+      } catch (parseError) {
+        console.error("Error parsing search query:", parseError);
+        searchQuery = "";
+      }
+
+      // Search products in Shopify
+      const products = await ShopifyService.searchProducts(businessId, searchQuery, 5);
+
+      if (!products || products.length === 0) {
+        return "I'm sorry, but I couldn't find any products at the moment. Please make sure your Shopify store is configured correctly.";
+      }
+
+      // Format product list
+      let productList = "🛍️ Here are our products:\n\n";
+      products.forEach((product, index) => {
+        productList += `${index + 1}. *${product.title}*\n`;
+        if (product.variants && product.variants.length > 0) {
+          productList += `   Price: $${product.variants[0].price}\n`;
+        }
+        if (product.body_html) {
+          // Strip HTML and limit description
+          const description = product.body_html.replace(/<[^>]*>/g, '').substring(0, 100);
+          productList += `   ${description}${product.body_html.length > 100 ? '...' : ''}\n`;
+        }
+        productList += `\n`;
+      });
+
+      productList += "\nWould you like more information about any of these products? Or would you like to add something to your cart?";
+
+      return productList;
+    } catch (error) {
+      console.error("Error handling Shopify product search:", error.message);
+      return "I apologize, but I encountered an error while searching for products. Please make sure Shopify integration is configured.";
+    }
+  }
+
+  /**
+   * Handle Shopify product details intent
+   */
+  async handleShopifyProductDetailsIntent(businessId, message, conversationHistory, businessTone) {
+    try {
+      console.log(`Handling Shopify product details intent for business ${businessId}`);
+
+      // Extract product name using GPT
+      const detailsPrompt = `Extract the product name from this message: "${message}"
+
+Respond ONLY with valid JSON in this format:
+{
+  "product_name": "name of the product"
+}`;
+
+      const response = await openai.chat.completions.create({
+        model: this.chatModel,
+        messages: [{ role: "user", content: detailsPrompt }],
+        temperature: 0.1,
+        max_tokens: 100,
+      });
+
+      let productName = "";
+      try {
+        const responseContent = response.choices[0].message.content.trim();
+        const jsonMatch = responseContent.match(/\{[\s\S]*\}/);
+        const jsonString = jsonMatch ? jsonMatch[0] : responseContent;
+        const analysis = JSON.parse(jsonString);
+        productName = analysis.product_name || "";
+      } catch (parseError) {
+        console.error("Error parsing product name:", parseError);
+        return "I couldn't understand which product you're asking about. Could you please specify the product name?";
+      }
+
+      // Search for the product
+      const products = await ShopifyService.searchProducts(businessId, productName, 1);
+
+      if (!products || products.length === 0) {
+        return `I'm sorry, I couldn't find a product matching "${productName}". Would you like to see all our products?`;
+      }
+
+      const product = products[0];
+
+      // Format product details
+      let details = `✅ *${product.title}*\n\n`;
+
+      if (product.body_html) {
+        const description = product.body_html.replace(/<[^>]*>/g, '');
+        details += `📝 ${description}\n\n`;
+      }
+
+      if (product.variants && product.variants.length > 0) {
+        const variant = product.variants[0];
+        details += `💰 Price: $${variant.price}\n`;
+        if (variant.inventory_quantity !== undefined) {
+          details += `📦 In Stock: ${variant.inventory_quantity} units\n`;
+        }
+      }
+
+      details += `\nWould you like to add this to your cart?`;
+
+      return details;
+    } catch (error) {
+      console.error("Error handling Shopify product details:", error.message);
+      return "I apologize, but I encountered an error while fetching product details.";
+    }
+  }
+
+  /**
+   * Handle Shopify cart add intent
+   */
+  async handleShopifyCartAddIntent(businessId, message, conversationHistory, businessTone, phoneNumber) {
+    try {
+      console.log(`Handling Shopify cart add intent for business ${businessId}`);
+
+      // Extract product and quantity using GPT
+      const cartPrompt = `Extract the product name and quantity from this message: "${message}"
+
+Respond ONLY with valid JSON in this format:
+{
+  "product_name": "name of the product",
+  "quantity": 1
+}
+
+If no quantity is specified, use 1. If no product is clear, use empty string.`;
+
+      const response = await openai.chat.completions.create({
+        model: this.chatModel,
+        messages: [{ role: "user", content: cartPrompt }],
+        temperature: 0.1,
+        max_tokens: 150,
+      });
+
+      let productName = "";
+      let quantity = 1;
+      try {
+        const responseContent = response.choices[0].message.content.trim();
+        const jsonMatch = responseContent.match(/\{[\s\S]*\}/);
+        const jsonString = jsonMatch ? jsonMatch[0] : responseContent;
+        const analysis = JSON.parse(jsonString);
+        productName = analysis.product_name || "";
+        quantity = parseInt(analysis.quantity) || 1;
+      } catch (parseError) {
+        console.error("Error parsing cart add data:", parseError);
+        return "I couldn't understand which product you'd like to add. Could you please specify the product name?";
+      }
+
+      if (!productName) {
+        return "Please specify which product you'd like to add to your cart.";
+      }
+
+      // Search for the product
+      const products = await ShopifyService.searchProducts(businessId, productName, 1);
+
+      if (!products || products.length === 0) {
+        return `I'm sorry, I couldn't find a product matching "${productName}". Would you like to see our product catalog?`;
+      }
+
+      const product = products[0];
+      const variant = product.variants && product.variants.length > 0 ? product.variants[0] : null;
+
+      if (!variant) {
+        return "I'm sorry, this product doesn't have any available variants.";
+      }
+
+      // Get conversation ID from phone number
+      const pool = require("../config/database");
+      const conversationResult = await pool.query(
+        "SELECT id FROM conversations WHERE business_id = $1 AND phone_number = $2",
+        [businessId, phoneNumber]
+      );
+
+      const conversationId = conversationResult.rows.length > 0 ? conversationResult.rows[0].id : null;
+
+      // Add to cart
+      const cartResult = await ShopifyService.addToCart(
+        businessId,
+        conversationId,
+        phoneNumber,
+        product.id.toString(),
+        variant.id.toString(),
+        quantity,
+        product.title,
+        variant.title || null,
+        parseFloat(variant.price)
+      );
+
+      if (!cartResult.success) {
+        return `I'm sorry, I couldn't add that to your cart. ${cartResult.error || ''}`;
+      }
+
+      const totalPrice = parseFloat(variant.price) * quantity;
+
+      let replyMessage = `✅ Added ${quantity} × *${product.title}* to your cart\n`;
+      replyMessage += `   Price: $${variant.price} each\n`;
+      replyMessage += `   Subtotal: $${totalPrice.toFixed(2)}\n\n`;
+
+      // Get cart total
+      const cart = await ShopifyService.getCart(businessId, phoneNumber);
+      if (cart && cart.total_price) {
+        replyMessage += `🛒 Cart Total: $${parseFloat(cart.total_price).toFixed(2)}\n\n`;
+      }
+
+      replyMessage += `Would you like to add anything else or view your cart?`;
+
+      return replyMessage;
+    } catch (error) {
+      console.error("Error handling Shopify cart add:", error.message);
+      return "I apologize, but I encountered an error while adding to your cart.";
+    }
+  }
+
+  /**
+   * Handle Shopify cart view intent
+   */
+  async handleShopifyCartViewIntent(businessId, message, conversationHistory, businessTone, phoneNumber) {
+    try {
+      console.log(`Handling Shopify cart view intent for business ${businessId}`);
+
+      // Get cart contents
+      const cart = await ShopifyService.getCart(businessId, phoneNumber);
+
+      if (!cart || !cart.items || cart.items.length === 0) {
+        return "🛒 Your cart is empty. Would you like to browse our products?";
+      }
+
+      // Format cart contents
+      let cartDisplay = "🛒 *Your Shopping Cart:*\n\n";
+
+      cart.items.forEach((item, index) => {
+        cartDisplay += `${index + 1}. *${item.product_title}*\n`;
+        if (item.variant_title) {
+          cartDisplay += `   Variant: ${item.variant_title}\n`;
+        }
+        cartDisplay += `   Quantity: ${item.quantity}\n`;
+        cartDisplay += `   Price: $${parseFloat(item.price).toFixed(2)} each\n`;
+        cartDisplay += `   Subtotal: $${parseFloat(item.total_price).toFixed(2)}\n\n`;
+      });
+
+      cartDisplay += `💰 *Total: $${parseFloat(cart.total_price).toFixed(2)}*\n\n`;
+      cartDisplay += `To complete your order, please contact us and we'll help you with checkout.`;
+
+      return cartDisplay;
+    } catch (error) {
+      console.error("Error handling Shopify cart view:", error.message);
+      return "I apologize, but I encountered an error while viewing your cart.";
     }
   }
 }
