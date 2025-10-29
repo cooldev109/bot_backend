@@ -246,6 +246,14 @@ class OpenAIService {
             businessTone,
             phoneNumber
           );
+        case "shopify_order_cancel":
+          return await this.handleShopifyOrderCancelIntent(
+            businessId,
+            latestMessage.content,
+            conversationHistory,
+            businessTone,
+            phoneNumber
+          );
         default:
           return await this.generateGeneralResponse([latestMessage], conversationHistory, businessTone);
       }
@@ -2923,6 +2931,30 @@ If no quantity is specified, use 1. If no product is clear, use empty string.`;
     } catch (error) {
       console.error("Error handling Shopify cart view:", error.message);
       return "I apologize, but I encountered an error while viewing your cart.";
+    }
+  }
+
+  /**
+   * Handle Shopify order cancel intent
+   */
+  async handleShopifyOrderCancelIntent(businessId, message, conversationHistory, businessTone, phoneNumber) {
+    try {
+      console.log(`Handling Shopify order cancel intent for business ${businessId}`);
+
+      // Cancel the order and clear cart
+      const result = await ShopifyService.cancelOrder(businessId, phoneNumber);
+
+      if (!result.success) {
+        if (result.error === 'No active cart found') {
+          return "You don't have any items in your cart to cancel.";
+        }
+        return `I'm sorry, I couldn't cancel your order. ${result.error || ''}`;
+      }
+
+      return "✅ Your order has been cancelled and your cart has been cleared.\n\nWould you like to browse our products again?";
+    } catch (error) {
+      console.error("Error handling Shopify order cancel:", error.message);
+      return "I apologize, but I encountered an error while cancelling your order.";
     }
   }
 }

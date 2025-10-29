@@ -120,6 +120,127 @@ class WhatsAppService {
   }
 
   /**
+   * Mark a message as read
+   * @param {string} messageId - Message ID to mark as read
+   * @returns {Promise<Object>} WhatsApp API response
+   */
+  async markMessageAsRead(messageId) {
+    try {
+      if (!this.phoneNumberId || !this.accessToken) {
+        throw new Error("WhatsApp configuration not set");
+      }
+
+      const cleanToken = this.sanitizeAccessToken(this.accessToken);
+
+      const response = await axios.post(
+        `${this.baseURL}/${this.phoneNumberId}/messages`,
+        {
+          messaging_product: "whatsapp",
+          status: "read",
+          message_id: messageId,
+        },
+        {
+          headers: {
+            Authorization: `Bearer ${cleanToken}`,
+            "Content-Type": "application/json",
+          },
+        }
+      );
+
+      return response.data;
+    } catch (error) {
+      console.error("Error marking message as read:", error.response?.data || error.message);
+      // Don't throw - this is not critical
+      return null;
+    }
+  }
+
+  /**
+   * Send a reaction to a message (used as typing indicator)
+   * @param {string} to - Recipient phone number
+   * @param {string} messageId - Message ID to react to
+   * @param {string} emoji - Emoji to react with (default: ⏳)
+   * @returns {Promise<Object>} WhatsApp API response
+   */
+  async sendReaction(to, messageId, emoji = "⏳") {
+    try {
+      if (!this.phoneNumberId || !this.accessToken) {
+        throw new Error("WhatsApp configuration not set");
+      }
+
+      const cleanToken = this.sanitizeAccessToken(this.accessToken);
+
+      const response = await axios.post(
+        `${this.baseURL}/${this.phoneNumberId}/messages`,
+        {
+          messaging_product: "whatsapp",
+          recipient_type: "individual",
+          to: to,
+          type: "reaction",
+          reaction: {
+            message_id: messageId,
+            emoji: emoji,
+          },
+        },
+        {
+          headers: {
+            Authorization: `Bearer ${cleanToken}`,
+            "Content-Type": "application/json",
+          },
+        }
+      );
+
+      return response.data;
+    } catch (error) {
+      console.error("Error sending reaction:", error.response?.data || error.message);
+      // Don't throw - this is not critical
+      return null;
+    }
+  }
+
+  /**
+   * Remove reaction from a message
+   * @param {string} to - Recipient phone number
+   * @param {string} messageId - Message ID to remove reaction from
+   * @returns {Promise<Object>} WhatsApp API response
+   */
+  async removeReaction(to, messageId) {
+    try {
+      if (!this.phoneNumberId || !this.accessToken) {
+        throw new Error("WhatsApp configuration not set");
+      }
+
+      const cleanToken = this.sanitizeAccessToken(this.accessToken);
+
+      const response = await axios.post(
+        `${this.baseURL}/${this.phoneNumberId}/messages`,
+        {
+          messaging_product: "whatsapp",
+          recipient_type: "individual",
+          to: to,
+          type: "reaction",
+          reaction: {
+            message_id: messageId,
+            emoji: "",
+          },
+        },
+        {
+          headers: {
+            Authorization: `Bearer ${cleanToken}`,
+            "Content-Type": "application/json",
+          },
+        }
+      );
+
+      return response.data;
+    } catch (error) {
+      console.error("Error removing reaction:", error.response?.data || error.message);
+      // Don't throw - this is not critical
+      return null;
+    }
+  }
+
+  /**
    * Download media from WhatsApp using media ID
    * @param {string} mediaId - WhatsApp media ID
    * @param {number} retries - Number of retry attempts

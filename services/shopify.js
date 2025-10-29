@@ -548,6 +548,58 @@ class ShopifyService {
       return { success: false, error: error.message };
     }
   }
+
+  /**
+   * Cancel draft order and clear cart
+   */
+  async cancelOrder(businessId, customerPhone) {
+    try {
+      const config = await this.getConfig(businessId);
+      if (!config) {
+        return { success: false, error: 'Shopify not configured' };
+      }
+
+      // Get cart
+      const cart = await this.getCart(businessId, customerPhone);
+      if (!cart) {
+        return { success: false, error: 'No active cart found' };
+      }
+
+      // Delete draft order in Shopify if exists
+      if (cart.shopify_draft_order_id) {
+        try {
+          await this.makeShopifyRequest(
+            config,
+            `draft_orders/${cart.shopify_draft_order_id}.json`,
+            'DELETE'
+          );
+          console.log(`Deleted Shopify draft order: ${cart.shopify_draft_order_id}`);
+        } catch (deleteError) {
+          // Draft order might already be deleted or completed, continue anyway
+          console.log('Draft order deletion error (continuing):', deleteError.message);
+        }
+      }
+
+      // Clear cart items
+      await pool.query('DELETE FROM shopify_cart_items WHERE cart_id = $1', [cart.id]);
+
+      // Mark cart as cancelled
+      await pool.query(
+        `UPDATE shopify_carts
+         SET status = $1,
+             shopify_draft_order_id = NULL,
+             checkout_url = NULL,
+             updated_at = CURRENT_TIMESTAMP
+         WHERE id = $2`,
+        ['cancelled', cart.id]
+      );
+
+      return { success: true };
+    } catch (error) {
+      console.error('Error cancelling order:', error);
+      return { success: false, error: error.message };
+    }
+  }
 }
 
 module.exports = new ShopifyService();

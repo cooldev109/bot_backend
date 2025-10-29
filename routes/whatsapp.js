@@ -146,6 +146,15 @@ router.post("/webhook", async (req, res) => {
     // Set WhatsApp service configuration for this business
     WhatsAppService.setBusinessConfig(whatsappConfig);
 
+    // Show typing indicator (mark as read + send reaction)
+    try {
+      await WhatsAppService.markMessageAsRead(messageData.messageId);
+      await WhatsAppService.sendReaction(messageData.from, messageData.messageId, "⏳");
+      console.log("Typing indicator sent");
+    } catch (indicatorError) {
+      console.log("Could not send typing indicator (non-critical):", indicatorError.message);
+    }
+
     // Get business tone for AI responses
     const businessTone = await BusinessService.getBusinessTone(businessId);
     console.log(`Using business tone: ${businessTone ? businessTone.name : "default"}`);
@@ -460,6 +469,9 @@ router.post("/webhook", async (req, res) => {
               isFromUser: false,
             });
 
+            // Remove typing indicator before sending response
+            await WhatsAppService.removeReaction(messageData.from, messageData.messageId);
+
             // Send the response via WhatsApp
             const whatsappResponse = await WhatsAppService.sendTextMessage(messageData.from, response);
             console.log("Intent response sent successfully:", whatsappResponse);
@@ -671,6 +683,9 @@ For me to provide a more accurate answer, could you please provide more context 
 
     // Send WhatsApp response
     try {
+      // Remove typing indicator before sending response
+      await WhatsAppService.removeReaction(messageData.from, messageData.messageId);
+
       const response = await WhatsAppService.sendTextMessage(messageData.from, aiResponse);
       console.log("WhatsApp response sent successfully:", response);
     } catch (whatsappError) {

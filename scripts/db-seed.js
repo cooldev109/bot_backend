@@ -719,6 +719,33 @@ const sampleIntents = [
       "Review my cart",
     ],
   },
+  {
+    name: "shopify_order_cancel",
+    description: "User wants to cancel their order or clear their cart",
+    confidence_threshold: 0.75,
+    examples: [
+      "Cancel my order",
+      "Cancel order",
+      "Clear my cart",
+      "Clear cart",
+      "Empty my cart",
+      "Remove everything",
+      "Delete my order",
+      "I don't want this anymore",
+      "Cancel this",
+      "Forget it",
+      "Never mind",
+      "Cancel everything",
+      "Start over",
+      "Reset my cart",
+      "Remove all items",
+      "Clear everything",
+      "Delete my cart",
+      "I changed my mind",
+      "Cancel the order",
+      "Remove my order",
+    ],
+  },
 ];
 
 // Seed users
