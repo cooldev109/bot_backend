@@ -425,6 +425,129 @@ class ShopifyService {
       throw error;
     }
   }
+
+  /**
+   * Create or update Shopify Draft Order from cart
+   */
+  async createOrUpdateDraftOrder(businessId, customerPhone) {
+    try {
+      const config = await this.getConfig(businessId);
+      if (!config) {
+        return { success: false, error: 'Shopify not configured' };
+      }
+
+      // Get cart with items
+      const cart = await this.getCart(businessId, customerPhone);
+      if (!cart || !cart.items || cart.items.length === 0) {
+        return { success: false, error: 'Cart is empty' };
+      }
+
+      // Build line items for Shopify
+      const lineItems = cart.items.map(item => ({
+        variant_id: parseInt(item.shopify_variant_id),
+        quantity: item.quantity,
+      }));
+
+      // Prepare draft order data
+      const draftOrderData = {
+        draft_order: {
+          line_items: lineItems,
+          customer: {
+            // Use phone as customer identifier
+            // Shopify will create customer if doesn't exist
+            phone: customerPhone,
+          },
+          use_customer_default_address: false,
+          note: `Order via WhatsApp Bot - ${new Date().toISOString()}`,
+        }
+      };
+
+      let response;
+      let draftOrderId = cart.shopify_draft_order_id;
+
+      if (draftOrderId) {
+        // Update existing draft order
+        try {
+          response = await this.makeShopifyRequest(
+            config,
+            `draft_orders/${draftOrderId}.json`,
+            'PUT',
+            draftOrderData
+          );
+        } catch (updateError) {
+          // If update fails (draft order may have been deleted), create new one
+          console.log('Draft order update failed, creating new one:', updateError.message);
+          draftOrderId = null;
+        }
+      }
+
+      if (!draftOrderId) {
+        // Create new draft order
+        response = await this.makeShopifyRequest(
+          config,
+          'draft_orders.json',
+          'POST',
+          draftOrderData
+        );
+        draftOrderId = response.draft_order.id;
+      }
+
+      const checkoutUrl = response.draft_order.invoice_url;
+
+      // Update cart with draft order info
+      await pool.query(
+        `UPDATE shopify_carts
+         SET shopify_draft_order_id = $1,
+             checkout_url = $2,
+             draft_order_created_at = CURRENT_TIMESTAMP,
+             updated_at = CURRENT_TIMESTAMP
+         WHERE id = $3`,
+        [draftOrderId.toString(), checkoutUrl, cart.id]
+      );
+
+      return {
+        success: true,
+        draft_order_id: draftOrderId,
+        checkout_url: checkoutUrl,
+      };
+    } catch (error) {
+      console.error('Error creating/updating draft order:', error);
+
+      // Check if it's an inventory error
+      if (error.message && error.message.includes('inventory')) {
+        return {
+          success: false,
+          error: 'Some items in your cart are no longer available in the requested quantity.',
+          inventory_error: true
+        };
+      }
+
+      return { success: false, error: error.message };
+    }
+  }
+
+  /**
+   * Complete draft order (mark as paid)
+   */
+  async completeDraftOrder(businessId, draftOrderId) {
+    try {
+      const config = await this.getConfig(businessId);
+      if (!config) {
+        return { success: false, error: 'Shopify not configured' };
+      }
+
+      const response = await this.makeShopifyRequest(
+        config,
+        `draft_orders/${draftOrderId}/complete.json`,
+        'PUT'
+      );
+
+      return { success: true, order: response.draft_order };
+    } catch (error) {
+      console.error('Error completing draft order:', error);
+      return { success: false, error: error.message };
+    }
+  }
 }
 
 module.exports = new ShopifyService();

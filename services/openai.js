@@ -2867,7 +2867,20 @@ If no quantity is specified, use 1. If no product is clear, use empty string.`;
         replyMessage += `🛒 Cart Total: $${parseFloat(cart.total_price).toFixed(2)}\n\n`;
       }
 
-      replyMessage += `Would you like to add anything else or view your cart?`;
+      // Create or update Shopify Draft Order
+      const draftOrderResult = await ShopifyService.createOrUpdateDraftOrder(businessId, phoneNumber);
+
+      if (draftOrderResult.success && draftOrderResult.checkout_url) {
+        replyMessage += `👉 *Complete your order here:*\n${draftOrderResult.checkout_url}\n\n`;
+        replyMessage += `You can still add more items - your checkout link will update automatically!`;
+      } else if (draftOrderResult.inventory_error) {
+        // Handle inventory issues
+        replyMessage += `⚠️ ${draftOrderResult.error}\n\n`;
+        replyMessage += `Please check the available quantity and try again.`;
+      } else {
+        // Other errors - still allow customer to add more items
+        replyMessage += `Would you like to add anything else or view your cart?`;
+      }
 
       return replyMessage;
     } catch (error) {
