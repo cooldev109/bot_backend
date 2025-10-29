@@ -274,16 +274,22 @@ class ShopifyService {
   /**
    * Add item to cart
    */
-  async addToCart(businessId, conversationId, customerPhone, productId, variantId, quantity = 1) {
+  async addToCart(businessId, conversationId, customerPhone, productId, variantId, quantity = 1, productTitle = null, variantTitle = null, price = null) {
     try {
-      // Get product details first
-      const product = await this.getProduct(businessId, productId);
+      // If product details not provided, fetch them
+      let product, variant;
 
-      // Find the variant
-      const variant = product.variants.find(v => v.id.toString() === variantId.toString()) || product.variants[0];
+      if (!productTitle || !price) {
+        product = await this.getProduct(businessId, productId);
+        variant = product.variants.find(v => v.id.toString() === variantId.toString()) || product.variants[0];
 
-      if (!variant.available) {
-        throw new Error('Product is out of stock');
+        if (!variant.available) {
+          return { success: false, error: 'Product is out of stock' };
+        }
+
+        productTitle = product.title;
+        variantTitle = variant.title;
+        price = parseFloat(variant.price);
       }
 
       // Get or create cart
@@ -311,17 +317,17 @@ class ShopifyService {
           `INSERT INTO shopify_cart_items
            (cart_id, shopify_product_id, shopify_variant_id, product_title, variant_title, quantity, price)
            VALUES ($1, $2, $3, $4, $5, $6, $7) RETURNING *`,
-          [cart.id, productId, variantId, product.title, variant.title, quantity, parseFloat(variant.price)]
+          [cart.id, productId, variantId, productTitle, variantTitle, quantity, price]
         );
       }
 
       // Update cart total
       await this.updateCartTotal(cart.id);
 
-      return result.rows[0];
+      return { success: true, data: result.rows[0] };
     } catch (error) {
       console.error('Error adding to cart:', error);
-      throw error;
+      return { success: false, error: error.message };
     }
   }
 
