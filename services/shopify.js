@@ -142,15 +142,39 @@ class ShopifyService {
         throw new Error('Shopify not configured for this business');
       }
 
-      let endpoint = `products.json?limit=${limit}`;
-      if (query) {
-        endpoint += `&title=${encodeURIComponent(query)}`;
-      }
-
+      // First try exact search
+      let endpoint = `products.json?limit=250`; // Get more products for better matching
       const response = await this.makeShopifyRequest(config, endpoint);
 
+      // If query provided, filter results for better matching (handles plurals, case-insensitive)
+      let filteredProducts = response.products;
+      if (query && query.trim()) {
+        const searchQuery = query.trim().toLowerCase();
+
+        filteredProducts = response.products.filter(product => {
+          const title = product.title.toLowerCase();
+
+          // Exact match
+          if (title === searchQuery) return true;
+
+          // Contains match
+          if (title.includes(searchQuery)) return true;
+
+          // Handle plurals: "shirts" matches "shirt"
+          if (searchQuery.endsWith('s') && title.includes(searchQuery.slice(0, -1))) return true;
+
+          // Handle singular: "shirt" matches "shirts"
+          if (title.endsWith('s') && searchQuery === title.slice(0, -1)) return true;
+
+          return false;
+        });
+      }
+
+      // Limit results
+      filteredProducts = filteredProducts.slice(0, limit);
+
       // Format products for easier consumption
-      return response.products.map(product => ({
+      return filteredProducts.map(product => ({
         id: product.id,
         title: product.title,
         description: product.body_html?.replace(/<[^>]*>/g, '') || '', // Strip HTML
