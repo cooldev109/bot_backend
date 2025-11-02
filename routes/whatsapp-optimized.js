@@ -155,12 +155,10 @@ async function processMessageFull(messageData) {
     // Configure WhatsApp service
     WhatsAppService.setBusinessConfig(whatsappConfig);
 
-    // ✅ OPTIMIZATION 2: Non-blocking typing indicators
-    // Don't await - let them run in parallel while we process
-    Promise.all([
-      WhatsAppService.markMessageAsRead(messageData.messageId),
-      WhatsAppService.sendTypingIndicator(messageData.from)
-    ]).catch(err => {
+    // ✅ OPTIMIZATION 2: Non-blocking typing indicator
+    // Mark as read and show typing indicator (3 dots animation)
+    // Don't await - let it run in parallel while we process
+    WhatsAppService.markAsReadWithTyping(messageData.messageId).catch(err => {
       console.log("Typing indicator failed (non-critical):", err.message);
     });
 
@@ -211,8 +209,7 @@ async function processMessageFull(messageData) {
       isFromUser: false,
     });
 
-    // Stop typing indicator and send response
-    await WhatsAppService.stopTypingIndicator(messageData.from);
+    // Send response (typing indicator auto-stops when message is sent)
     await WhatsAppService.sendMessage(messageData.from, aiResponse);
 
     const totalTime = Date.now() - startTime;

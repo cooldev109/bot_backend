@@ -146,10 +146,9 @@ router.post("/webhook", async (req, res) => {
     // Set WhatsApp service configuration for this business
     WhatsAppService.setBusinessConfig(whatsappConfig);
 
-    // Show typing indicator (mark as read + send typing status)
+    // Show typing indicator (mark as read + show 3 dots animation)
     try {
-      await WhatsAppService.markMessageAsRead(messageData.messageId);
-      await WhatsAppService.sendTypingIndicator(messageData.from);
+      await WhatsAppService.markAsReadWithTyping(messageData.messageId);
       console.log("Typing indicator sent");
     } catch (indicatorError) {
       console.log("Could not send typing indicator (non-critical):", indicatorError.message);
@@ -469,10 +468,7 @@ router.post("/webhook", async (req, res) => {
               isFromUser: false,
             });
 
-            // Stop typing indicator before sending response
-            await WhatsAppService.stopTypingIndicator(messageData.from);
-
-            // Send the response via WhatsApp
+            // Send the response via WhatsApp (typing indicator auto-stops)
             const whatsappResponse = await WhatsAppService.sendTextMessage(messageData.from, response);
             console.log("Intent response sent successfully:", whatsappResponse);
 
@@ -681,11 +677,8 @@ For me to provide a more accurate answer, could you please provide more context 
       isFromUser: false,
     });
 
-    // Send WhatsApp response
+    // Send WhatsApp response (typing indicator auto-stops)
     try {
-      // Stop typing indicator before sending response
-      await WhatsAppService.stopTypingIndicator(messageData.from);
-
       const response = await WhatsAppService.sendTextMessage(messageData.from, aiResponse);
       console.log("WhatsApp response sent successfully:", response);
     } catch (whatsappError) {

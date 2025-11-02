@@ -122,9 +122,10 @@ class WhatsAppService {
   /**
    * Mark a message as read
    * @param {string} messageId - Message ID to mark as read
+   * @param {boolean} showTyping - Whether to show typing indicator (default: false)
    * @returns {Promise<Object>} WhatsApp API response
    */
-  async markMessageAsRead(messageId) {
+  async markMessageAsRead(messageId, showTyping = false) {
     try {
       if (!this.phoneNumberId || !this.accessToken) {
         throw new Error("WhatsApp configuration not set");
@@ -132,13 +133,22 @@ class WhatsAppService {
 
       const cleanToken = this.sanitizeAccessToken(this.accessToken);
 
+      const payload = {
+        messaging_product: "whatsapp",
+        status: "read",
+        message_id: messageId,
+      };
+
+      // Add typing indicator if requested
+      if (showTyping) {
+        payload.typing_indicator = {
+          type: "text"
+        };
+      }
+
       const response = await axios.post(
         `${this.baseURL}/${this.phoneNumberId}/messages`,
-        {
-          messaging_product: "whatsapp",
-          status: "read",
-          message_id: messageId,
-        },
+        payload,
         {
           headers: {
             Authorization: `Bearer ${cleanToken}`,
@@ -241,83 +251,13 @@ class WhatsAppService {
   }
 
   /**
-   * Send typing indicator (shows three dots animation)
-   * @param {string} to - Recipient phone number
+   * Mark message as read and show typing indicator (3 dots)
+   * This is a helper method that combines read receipt with typing indicator
+   * @param {string} messageId - Message ID to mark as read
    * @returns {Promise<Object>} WhatsApp API response
    */
-  async sendTypingIndicator(to) {
-    try {
-      if (!this.phoneNumberId || !this.accessToken) {
-        throw new Error("WhatsApp configuration not set");
-      }
-
-      const cleanToken = this.sanitizeAccessToken(this.accessToken);
-
-      const response = await axios.post(
-        `${this.baseURL}/${this.phoneNumberId}/messages`,
-        {
-          messaging_product: "whatsapp",
-          recipient_type: "individual",
-          to: to,
-          type: "typing",
-          typing: {
-            status: "typing"
-          }
-        },
-        {
-          headers: {
-            Authorization: `Bearer ${cleanToken}`,
-            "Content-Type": "application/json",
-          },
-        }
-      );
-
-      return response.data;
-    } catch (error) {
-      console.error("Error sending typing indicator:", error.response?.data || error.message);
-      // Don't throw - this is not critical
-      return null;
-    }
-  }
-
-  /**
-   * Stop typing indicator
-   * @param {string} to - Recipient phone number
-   * @returns {Promise<Object>} WhatsApp API response
-   */
-  async stopTypingIndicator(to) {
-    try {
-      if (!this.phoneNumberId || !this.accessToken) {
-        throw new Error("WhatsApp configuration not set");
-      }
-
-      const cleanToken = this.sanitizeAccessToken(this.accessToken);
-
-      const response = await axios.post(
-        `${this.baseURL}/${this.phoneNumberId}/messages`,
-        {
-          messaging_product: "whatsapp",
-          recipient_type: "individual",
-          to: to,
-          type: "typing",
-          typing: {
-            status: "stopped"
-          }
-        },
-        {
-          headers: {
-            Authorization: `Bearer ${cleanToken}`,
-            "Content-Type": "application/json",
-          },
-        }
-      );
-
-      return response.data;
-    } catch (error) {
-      console.error("Error stopping typing indicator:", error.response?.data || error.message);
-      // Don't throw - this is not critical
-      return null;
-    }
+  async markAsReadWithTyping(messageId) {
+    return this.markMessageAsRead(messageId, true);
   }
 
   /**
