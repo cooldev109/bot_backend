@@ -159,7 +159,7 @@ async function processMessageFull(messageData) {
     // Don't await - let them run in parallel while we process
     Promise.all([
       WhatsAppService.markMessageAsRead(messageData.messageId),
-      WhatsAppService.sendReaction(messageData.from, messageData.messageId, "⏳")
+      WhatsAppService.sendTypingIndicator(messageData.from)
     ]).catch(err => {
       console.log("Typing indicator failed (non-critical):", err.message);
     });
@@ -211,11 +211,9 @@ async function processMessageFull(messageData) {
       isFromUser: false,
     });
 
-    // Send response to user
+    // Stop typing indicator and send response
+    await WhatsAppService.stopTypingIndicator(messageData.from);
     await WhatsAppService.sendMessage(messageData.from, aiResponse);
-
-    // Remove hourglass reaction
-    await WhatsAppService.sendReaction(messageData.from, messageData.messageId, "");
 
     const totalTime = Date.now() - startTime;
     console.log(`✅ Message ${messageData.messageId} processed in ${totalTime}ms`);

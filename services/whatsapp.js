@@ -241,6 +241,86 @@ class WhatsAppService {
   }
 
   /**
+   * Send typing indicator (shows three dots animation)
+   * @param {string} to - Recipient phone number
+   * @returns {Promise<Object>} WhatsApp API response
+   */
+  async sendTypingIndicator(to) {
+    try {
+      if (!this.phoneNumberId || !this.accessToken) {
+        throw new Error("WhatsApp configuration not set");
+      }
+
+      const cleanToken = this.sanitizeAccessToken(this.accessToken);
+
+      const response = await axios.post(
+        `${this.baseURL}/${this.phoneNumberId}/messages`,
+        {
+          messaging_product: "whatsapp",
+          recipient_type: "individual",
+          to: to,
+          type: "typing",
+          typing: {
+            status: "typing"
+          }
+        },
+        {
+          headers: {
+            Authorization: `Bearer ${cleanToken}`,
+            "Content-Type": "application/json",
+          },
+        }
+      );
+
+      return response.data;
+    } catch (error) {
+      console.error("Error sending typing indicator:", error.response?.data || error.message);
+      // Don't throw - this is not critical
+      return null;
+    }
+  }
+
+  /**
+   * Stop typing indicator
+   * @param {string} to - Recipient phone number
+   * @returns {Promise<Object>} WhatsApp API response
+   */
+  async stopTypingIndicator(to) {
+    try {
+      if (!this.phoneNumberId || !this.accessToken) {
+        throw new Error("WhatsApp configuration not set");
+      }
+
+      const cleanToken = this.sanitizeAccessToken(this.accessToken);
+
+      const response = await axios.post(
+        `${this.baseURL}/${this.phoneNumberId}/messages`,
+        {
+          messaging_product: "whatsapp",
+          recipient_type: "individual",
+          to: to,
+          type: "typing",
+          typing: {
+            status: "stopped"
+          }
+        },
+        {
+          headers: {
+            Authorization: `Bearer ${cleanToken}`,
+            "Content-Type": "application/json",
+          },
+        }
+      );
+
+      return response.data;
+    } catch (error) {
+      console.error("Error stopping typing indicator:", error.response?.data || error.message);
+      // Don't throw - this is not critical
+      return null;
+    }
+  }
+
+  /**
    * Download media from WhatsApp using media ID
    * @param {string} mediaId - WhatsApp media ID
    * @param {number} retries - Number of retry attempts
