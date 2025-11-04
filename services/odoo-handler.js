@@ -219,6 +219,16 @@ If any field is not mentioned, use appropriate defaults.`;
         };
       }
 
+      // Check if product already exists
+      const existingProduct = await OdooService.searchProducts(businessId, productData.name);
+      if (existingProduct.success && existingProduct.products.length > 0) {
+        const product = existingProduct.products[0];
+        return {
+          handled: true,
+          response: `A product named "*${product.name}*" already exists (ID: ${product.id}, Price: $${product.list_price}).\n\n💡 *Did you want to:*\n• Buy this product? Say "I want to buy ${product.name}"\n• Create a different product? Provide more details`,
+        };
+      }
+
       const result = await OdooService.createProduct(businessId, productData);
 
       if (result.success) {
@@ -240,7 +250,7 @@ If any field is not mentioned, use appropriate defaults.`;
       console.error("Error handling product creation:", error);
       return {
         handled: true,
-        response: "I encountered an error while creating the product. Please try again.",
+        response: `I encountered an error while creating the product: ${error.message}\n\n💡 *Did you mean to purchase a product?*\nTry saying:\n• "I want to buy [product name]"\n• "Show me available products"\n• "Place an order for [product name]"`,
       };
     }
   }
@@ -380,9 +390,10 @@ If any field is not mentioned, use empty string for text fields and 1 for quanti
       }
     } catch (error) {
       console.error("Error handling order creation:", error);
+      const errorMsg = error.message || "Unknown error";
       return {
         handled: true,
-        response: `Failed to create order: ${error.message}`,
+        response: `I couldn't create the order. Error: ${errorMsg}\n\n💡 Please ensure:\n• The product exists (say "show products" to see available items)\n• Your customer information is correct\n• The Odoo Sales module is installed`,
       };
     }
   }

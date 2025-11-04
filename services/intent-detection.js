@@ -316,6 +316,10 @@ Examples:
 "Search for customers" -> {"intent": "odoo_customer_search", "confidence": 0.9}
 "Create a new product" -> {"intent": "odoo_product_create", "confidence": 0.9}
 "Create a new sale order" -> {"intent": "odoo_sale_order_create", "confidence": 0.9}
+"I want to buy a jacket" -> {"intent": "odoo_sale_order_create", "confidence": 0.95}
+"Purchase a laptop" -> {"intent": "odoo_sale_order_create", "confidence": 0.95}
+"I want to order something" -> {"intent": "odoo_sale_order_create", "confidence": 0.9}
+"Show me products" -> {"intent": "odoo_product_search", "confidence": 0.9}
 "Create a new invoice" -> {"intent": "odoo_invoice_create", "confidence": 0.9}
 "Check inventory" -> {"intent": "odoo_inventory_check", "confidence": 0.9}
 "Create a new lead" -> {"intent": "odoo_lead_create", "confidence": 0.9}`;
