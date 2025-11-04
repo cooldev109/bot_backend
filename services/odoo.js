@@ -543,6 +543,35 @@ class OdooService {
     }
   }
 
+  async searchProducts(businessId, searchTerm) {
+    try {
+      const domain =
+        searchTerm === "all"
+          ? []
+          : [["name", "ilike", searchTerm]];
+
+      const products = await this.makeJsonRpcCall(
+        businessId,
+        "search_read",
+        "product.product",
+        [domain, ["id", "name", "list_price"]],
+        { limit: 10 }
+      );
+
+      return {
+        success: true,
+        products: products || [],
+      };
+    } catch (error) {
+      console.error("Error searching products:", error.message);
+      return {
+        success: false,
+        error: error.message,
+        products: [],
+      };
+    }
+  }
+
   async createProduct(businessId, productData) {
     try {
       const values = {

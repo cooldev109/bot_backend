@@ -11,6 +11,7 @@ const pool = require("../config/database");
 const path = require("path");
 const fs = require("fs-extra");
 const IntentDetectionService = require("../services/intent-detection");
+const OdooHandler = require("../services/odoo-handler");
 const { createResponse } = require("../middleware/error-handler");
 
 // Webhook verification endpoint
@@ -146,9 +147,10 @@ router.post("/webhook", async (req, res) => {
     // Set WhatsApp service configuration for this business
     WhatsAppService.setBusinessConfig(whatsappConfig);
 
-    // Show typing indicator (mark as read + show 3 dots animation)
+    // Show typing indicator (mark as read + send hourglass reaction)
     try {
-      await WhatsAppService.markAsReadWithTyping(messageData.messageId);
+      await WhatsAppService.markMessageAsRead(messageData.messageId);
+      await WhatsAppService.sendReaction(messageData.from, messageData.messageId, "⏳");
       console.log("Typing indicator sent");
     } catch (indicatorError) {
       console.log("Could not send typing indicator (non-critical):", indicatorError.message);
@@ -436,13 +438,54 @@ router.post("/webhook", async (req, res) => {
     if (messageData.messageType === "text" && messageData.content) {
       try {
         console.log("Enhanced intent detection starting...");
-        
+
         // Use the proper intent detection system
         const intentResult = await IntentDetectionService.detectIntent(messageData.content, businessId);
-        
+
         console.log("Intent detection result:", intentResult);
-        
-        // Handle detected intents using the proper intent handlers
+
+        // Check for Odoo-related intents first
+        if (intentResult && intentResult.intent && intentResult.intent.startsWith("odoo_") && intentResult.confidence >= 0.7) {
+          console.log("Processing Odoo-related intent...");
+
+          try {
+            const odooResponse = await OdooHandler.handleOdooIntent(
+              businessId,
+              messageData.from,
+              messageData.content,
+              intentResult.intent,
+              businessTone
+            );
+
+            if (odooResponse && odooResponse.handled) {
+              // Save the response to database
+              await DatabaseService.saveMessage({
+                businessId: businessId,
+                conversationId: conversation.id,
+                messageId: `odoo_${Date.now()}`,
+                fromNumber: messageData.to,
+                toNumber: messageData.from,
+                messageType: "text",
+                content: odooResponse.response,
+                mediaUrl: null,
+                localFilePath: null,
+                isFromUser: false,
+              });
+
+              // Remove typing reaction and send the response
+              await WhatsAppService.sendReaction(messageData.from, messageData.messageId, "");
+              const whatsappResponse = await WhatsAppService.sendTextMessage(messageData.from, odooResponse.response);
+              console.log("Odoo response sent successfully:", whatsappResponse);
+
+              return res.status(200).send("OK");
+            }
+          } catch (odooError) {
+            console.error("Odoo handler error:", odooError);
+            // Fall through to other handlers
+          }
+        }
+
+        // Handle other detected intents using the proper intent handlers
         if (intentResult && intentResult.confidence >= 0.7) {
           const response = await OpenAIService.handleDetectedIntent(
             intentResult,
@@ -452,7 +495,7 @@ router.post("/webhook", async (req, res) => {
             businessId,
             messageData.from
           );
-          
+
           if (response) {
             // Save the response to database
             await DatabaseService.saveMessage({
@@ -468,7 +511,8 @@ router.post("/webhook", async (req, res) => {
               isFromUser: false,
             });
 
-            // Send the response via WhatsApp (typing indicator auto-stops)
+            // Remove typing reaction and send the response
+            await WhatsAppService.sendReaction(messageData.from, messageData.messageId, "");
             const whatsappResponse = await WhatsAppService.sendTextMessage(messageData.from, response);
             console.log("Intent response sent successfully:", whatsappResponse);
 
@@ -677,8 +721,9 @@ For me to provide a more accurate answer, could you please provide more context 
       isFromUser: false,
     });
 
-    // Send WhatsApp response (typing indicator auto-stops)
+    // Send WhatsApp response (remove typing reaction first)
     try {
+      await WhatsAppService.sendReaction(messageData.from, messageData.messageId, "");
       const response = await WhatsAppService.sendTextMessage(messageData.from, aiResponse);
       console.log("WhatsApp response sent successfully:", response);
     } catch (whatsappError) {

@@ -23,6 +23,7 @@ const CalendarHandler = require("../services/calendar-handler");
 const AirtableService = require("../services/airtable");
 const EmbeddingsService = require("../services/embeddings");
 const IntentDetectionService = require("../services/intent-detection");
+const OdooHandler = require("../services/odoo-handler");
 const { createResponse } = require("../middleware/error-handler");
 
 // Import our new helper services
@@ -156,9 +157,12 @@ async function processMessageFull(messageData) {
     WhatsAppService.setBusinessConfig(whatsappConfig);
 
     // ✅ OPTIMIZATION 2: Non-blocking typing indicator
-    // Mark as read and show typing indicator (3 dots animation)
-    // Don't await - let it run in parallel while we process
-    WhatsAppService.markAsReadWithTyping(messageData.messageId).catch(err => {
+    // Mark as read and show typing reaction (hourglass)
+    // Don't await - let them run in parallel while we process
+    Promise.all([
+      WhatsAppService.markMessageAsRead(messageData.messageId),
+      WhatsAppService.sendReaction(messageData.from, messageData.messageId, "⏳")
+    ]).catch(err => {
       console.log("Typing indicator failed (non-critical):", err.message);
     });
 
@@ -209,7 +213,8 @@ async function processMessageFull(messageData) {
       isFromUser: false,
     });
 
-    // Send response (typing indicator auto-stops when message is sent)
+    // Remove typing reaction and send response
+    await WhatsAppService.sendReaction(messageData.from, messageData.messageId, "");
     await WhatsAppService.sendMessage(messageData.from, aiResponse);
 
     const totalTime = Date.now() - startTime;
@@ -260,6 +265,29 @@ async function processTextMessage(messageData, conversation, businessId, busines
       }
     } catch (calendarError) {
       console.error("Calendar handler error:", calendarError);
+      // Fall through to regular AI response
+    }
+  }
+
+  // Check for Odoo-related intents
+  if (intentResult.intent && intentResult.intent.startsWith("odoo_")) {
+    console.log("Processing Odoo-related intent...");
+
+    try {
+      const odooResponse = await OdooHandler.handleOdooIntent(
+        businessId,
+        messageData.from,
+        userMessage,
+        intentResult.intent,
+        businessTone
+      );
+
+      if (odooResponse && odooResponse.handled) {
+        aiResponse = odooResponse.response;
+        return aiResponse;
+      }
+    } catch (odooError) {
+      console.error("Odoo handler error:", odooError);
       // Fall through to regular AI response
     }
   }
